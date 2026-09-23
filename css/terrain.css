@@ -1,0 +1,1064 @@
+/* Module Optimisation Terrain + Mode Scan (extrait de l'ancien index.html, inchangé). */
+/* ═══════════ CONTAINER PLEINE PAGE ═══════════ */
+/* L'onglet terrain mange tout l'espace disponible : on retire le padding du main et de la page parent */
+.tab-content#tab-terrain.active {
+    padding: 0 !important;
+    margin: 0 !important;
+}
+.terrain-page {
+    display: flex; flex-direction: column;
+    height: calc(100vh - 60px);   /* 60px = hauteur du header de l'app */
+    width: 100%; overflow: hidden;
+    background: var(--background, #f8fafc);
+}
+
+/* ═══════════ TOPBAR : import + recherche + filtres + actions ═══════════ */
+.terrain-topbar {
+    flex-shrink: 0;
+    background: var(--surface, #fff);
+    border-bottom: 1px solid var(--border, #e2e8f0);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    padding: 0.55rem 0.85rem;
+    display: flex; flex-direction: column; gap: 0.45rem;
+}
+.terrain-topbar-row {
+    display: flex; gap: 0.45rem; align-items: center; flex-wrap: wrap;
+}
+.terrain-actions-row { padding-top: 0.45rem; border-top: 1px dashed var(--border, #e2e8f0); }
+
+.terrain-dropzone {
+    display: inline-flex; align-items: center; gap: 0.4rem;
+    padding: 0.45rem 0.8rem;
+    border: 2px dashed var(--primary, #3b82f6); border-radius: 8px;
+    background: rgba(59,130,246,0.05); cursor: pointer;
+    color: var(--primary, #3b82f6); font-size: 0.82rem; font-weight: 700;
+    transition: all 0.15s; white-space: nowrap;
+}
+.terrain-dropzone:hover, .terrain-dropzone.drag {
+    background: rgba(59,130,246,0.15); border-style: solid;
+}
+.terrain-dropzone i { font-size: 1rem; }
+
+.terrain-search {
+    flex: 1 1 250px; min-width: 200px; max-width: 360px;
+    position: relative; display: flex; align-items: center;
+}
+.terrain-search i.fa-search {
+    position: absolute; left: 0.6rem; color: var(--text-secondary, #94a3b8);
+    font-size: 0.85rem; pointer-events: none;
+}
+.terrain-search input {
+    width: 100%; padding: 0.45rem 1.8rem 0.45rem 2rem;
+    border: 1px solid var(--border, #cbd5e1); border-radius: 8px;
+    background: var(--background, #f8fafc); color: var(--text, #1e293b);
+    font-size: 0.85rem;
+}
+.terrain-search input:focus {
+    outline: none; border-color: var(--primary, #3b82f6);
+    background: var(--surface, #fff);
+}
+#terrain-searchClear {
+    position: absolute; right: 0.4rem;
+    background: transparent; border: none; cursor: pointer;
+    color: var(--text-secondary, #94a3b8); font-size: 1.1rem;
+    padding: 0 0.3rem; line-height: 1; display: none;
+}
+.terrain-search.has-text #terrain-searchClear { display: block; }
+#terrain-searchClear:hover { color: var(--danger, #dc2626); }
+
+.terrain-filter {
+    background: var(--background, #f8fafc); border: 1px solid var(--border, #cbd5e1);
+    color: var(--text, #1e293b); padding: 0.4rem 0.55rem; border-radius: 8px;
+    font-size: 0.8rem; cursor: pointer;
+    max-width: 160px;
+}
+.terrain-filter.active { background: rgba(59,130,246,0.1); border-color: var(--primary, #3b82f6); color: var(--primary, #3b82f6); font-weight: 600; }
+
+.terrain-counter {
+    font-size: 0.78rem; font-weight: 700; color: var(--text-secondary, #64748b);
+    padding: 0.4rem 0.7rem; background: var(--background, #f1f5f9);
+    border-radius: 999px; white-space: nowrap;
+}
+
+.terrain-btn-icon {
+    background: var(--background, #f1f5f9); border: 1px solid var(--border, #cbd5e1);
+    color: var(--text, #1e293b); padding: 0.4rem 0.55rem; border-radius: 8px;
+    cursor: pointer; font-size: 0.85rem;
+    display: inline-flex; align-items: center; justify-content: center;
+    transition: all 0.15s;
+}
+.terrain-btn-icon:hover { background: var(--surface-hover, #e2e8f0); }
+.terrain-btn-toggle {
+    margin-left: auto;   /* pousse vers la droite */
+    background: var(--primary, #3b82f6); color: white; border-color: var(--primary, #3b82f6);
+}
+.terrain-btn-toggle:hover { background: var(--primary-hover, #2563eb); }
+
+.terrain-btn {
+    display: inline-flex; align-items: center; gap: 0.35rem;
+    background: var(--background, #f1f5f9); border: 1px solid var(--border, #cbd5e1);
+    color: var(--text, #1e293b); padding: 0.4rem 0.7rem; border-radius: 8px;
+    font-size: 0.8rem; font-weight: 600; cursor: pointer;
+    transition: all 0.15s; white-space: nowrap;
+}
+.terrain-btn:hover:not(:disabled) {
+    background: var(--surface-hover, #e2e8f0); border-color: var(--text-secondary, #94a3b8);
+}
+.terrain-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.terrain-btn.primary { background: var(--primary, #3b82f6); border-color: var(--primary, #3b82f6); color: white; }
+.terrain-btn.primary:hover:not(:disabled) { background: var(--primary-hover, #2563eb); }
+.terrain-btn.danger { background: var(--danger-light, #fee2e2); border-color: #fecaca; color: var(--danger, #dc2626); }
+.terrain-btn.danger:hover:not(:disabled) { background: #fecaca; }
+.terrain-btn.sm { padding: 0.25rem 0.5rem; font-size: 0.72rem; }
+.terrain-inp {
+    background: var(--background, #f1f5f9); border: 1px solid var(--border, #cbd5e1);
+    color: var(--text, #1e293b); padding: 0.4rem 0.55rem; border-radius: 8px;
+    font-size: 0.82rem; width: 60px;
+}
+.terrain-sep {
+    width: 1px; height: 22px; background: var(--border, #e2e8f0); margin: 0 0.15rem;
+}
+
+.terrain-status-inline {
+    flex: 1 1 200px; min-width: 200px; max-width: 100%;
+    padding: 0.35rem 0.7rem;
+    font-size: 0.78rem; color: var(--text-secondary, #64748b);
+    background: var(--background, #f8fafc);
+    border-radius: 8px;
+    border-left: 3px solid var(--text-secondary, #94a3b8);
+}
+.terrain-status-inline.success { border-color: var(--success, #16a34a); color: var(--text, #1e293b); }
+.terrain-status-inline.error   { border-color: var(--danger, #dc2626);  background: var(--danger-light, #fee2e2); color: var(--danger, #991b1b); }
+.terrain-status-inline.info    { border-color: var(--primary, #3b82f6); color: var(--text, #1e293b); }
+
+/* ═══════════ LAYOUT : carte + sidebar ═══════════ */
+.terrain-layout {
+    flex: 1; display: grid;
+    grid-template-columns: 1fr 360px;
+    min-height: 0;   /* essentiel pour que la grid laisse la map prendre sa hauteur */
+    transition: grid-template-columns 0.25s ease;
+}
+.terrain-layout.sidebar-collapsed { grid-template-columns: 1fr 0px; }
+.terrain-layout.sidebar-collapsed .terrain-side {
+    transform: translateX(100%); opacity: 0; pointer-events: none;
+}
+
+.terrain-map-wrap { position: relative; background: #ddd; min-width: 0; }
+#terrain-map { width: 100%; height: 100%; }
+#terrain-map.drawing { cursor: crosshair !important; }
+#terrain-map.drawing .leaflet-interactive { cursor: crosshair !important; }
+
+.terrain-side {
+    background: var(--surface, #fff); border-left: 1px solid var(--border, #e2e8f0);
+    padding: 0.7rem; overflow-y: auto;
+    display: flex; flex-direction: column; gap: 0.6rem;
+    transition: transform 0.25s ease, opacity 0.2s ease;
+}
+.terrain-side-head {
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 0.74rem; font-weight: 700; text-transform: uppercase;
+    color: var(--text-secondary, #64748b); letter-spacing: 0.04em;
+    padding-bottom: 0.35rem; border-bottom: 1px solid var(--border, #e2e8f0);
+}
+.terrain-side-badge {
+    background: var(--primary, #3b82f6); color: white;
+    padding: 0.1rem 0.45rem; border-radius: 999px; font-size: 0.7rem;
+}
+.terrain-empty {
+    padding: 1.2rem 0.5rem; text-align: center; font-size: 0.8rem;
+    color: var(--text-secondary, #94a3b8); font-style: italic;
+}
+
+/* Tournée : card */
+.terrain-tour-list { display: flex; flex-direction: column; gap: 0.45rem; }
+.terrain-tour-card {
+    border: 1px solid var(--border, #e2e8f0); border-radius: 10px;
+    background: var(--background, #f8fafc); padding: 0.55rem;
+}
+.terrain-tour-card:hover { box-shadow: 0 2px 6px rgba(0,0,0,0.06); }
+.terrain-tour-head { display: flex; align-items: center; gap: 0.5rem; cursor: pointer; }
+.terrain-tour-dot {
+    width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0;
+    box-shadow: 0 0 0 2px var(--surface, #fff);
+}
+.terrain-tour-info { flex: 1; min-width: 0; }
+.terrain-tour-name {
+    font-weight: 600; font-size: 0.85rem; color: var(--text, #1e293b);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.terrain-tour-meta {
+    font-size: 0.7rem; color: var(--text-secondary, #64748b);
+    display: flex; gap: 0.5rem; margin-top: 0.1rem; flex-wrap: wrap;
+}
+.terrain-tour-actions { display: flex; gap: 0.2rem; }
+.terrain-tour-body { margin-top: 0.45rem; padding-top: 0.45rem; border-top: 1px dashed var(--border, #e2e8f0); display: flex; flex-direction: column; gap: 0.4rem; }
+.terrain-tour-body.hidden { display: none; }
+.terrain-livreur-sel { display: flex; align-items: center; gap: 0.4rem; }
+.terrain-livreur-sel select {
+    flex: 1; padding: 0.3rem 0.4rem; background: var(--surface, #fff);
+    border: 1px solid var(--border, #cbd5e1); color: var(--text, #1e293b);
+    border-radius: 6px; font-size: 0.78rem;
+}
+.terrain-livreur-sel label {
+    font-size: 0.7rem; font-weight: 600; color: var(--text-secondary, #64748b);
+    flex-shrink: 0;
+}
+.terrain-livreur-badge {
+    font-size: 0.68rem; font-weight: 600; padding: 0.1rem 0.4rem; border-radius: 999px;
+    background: var(--background, #f1f5f9); color: var(--text-secondary, #64748b);
+}
+.terrain-livreur-badge.assigned { background: rgba(22,163,74,0.15); color: var(--success, #16a34a); }
+.terrain-point-list {
+    max-height: 180px; overflow-y: auto; background: var(--surface, #fff);
+    border: 1px solid var(--border, #e2e8f0); border-radius: 6px; padding: 0.25rem;
+}
+.terrain-point-item {
+    display: flex; align-items: center; gap: 0.35rem;
+    padding: 0.25rem 0.4rem; border-radius: 4px;
+    font-size: 0.7rem; color: var(--text, #1e293b);
+}
+.terrain-point-item:hover { background: var(--background, #f1f5f9); }
+.terrain-point-item .pos {
+    background: var(--primary, #3b82f6); color: white;
+    width: 20px; height: 20px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 0.68rem; flex-shrink: 0;
+}
+.terrain-point-item .bc { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: monospace; }
+.terrain-point-item .rm {
+    color: var(--danger, #dc2626); cursor: pointer; padding: 0 0.3rem;
+    font-weight: 700; opacity: 0; transition: opacity 0.15s;
+}
+.terrain-point-item:hover .rm { opacity: 1; }
+
+.terrain-stats {
+    display: flex; flex-direction: column; gap: 0.3rem;
+    background: var(--background, #f8fafc); border-radius: 8px; padding: 0.5rem 0.7rem;
+}
+.terrain-stat-row {
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 0.78rem; color: var(--text-secondary, #64748b);
+}
+.terrain-stat-row b { color: var(--text, #1e293b); font-size: 0.88rem; }
+
+/* ═══════════ MARQUEURS DE COLIS ═══════════ */
+/* Marqueur simple (colis non assigné à une tournée) - bleu vif, bien visible sur OSM */
+.terrain-marker {
+    width: 18px; height: 18px; border-radius: 50%;
+    background: #2563eb;
+    border: 3px solid white;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.35), 0 0 0 1px rgba(37,99,235,0.4);
+    transition: transform 0.12s ease;
+}
+.terrain-marker:hover {
+    transform: scale(1.25);
+    z-index: 1000;
+}
+.terrain-marker.labeled {
+    width: 26px; height: 26px;
+    color: white; font-size: 11px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    border: 3px solid white;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.4);
+}
+
+/* Dépôt : marqueur vert très visible */
+.terrain-depot-icon {
+    width: 36px; height: 36px;
+    background: linear-gradient(135deg, #16a34a, #15803d);
+    border: 3px solid white; border-radius: 50% 50% 50% 0;
+    transform: rotate(-45deg);
+    box-shadow: 0 3px 10px rgba(0,0,0,0.4), 0 0 0 2px rgba(22,163,74,0.3);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+}
+.terrain-depot-icon i {
+    transform: rotate(45deg);
+    color: white; font-size: 14px;
+}
+.terrain-depot-icon:hover { transform: rotate(-45deg) scale(1.1); }
+
+/* Indicateur "mode placement dépôt actif" */
+#terrain-map.placing-depot { cursor: crosshair !important; }
+#terrain-map.placing-depot::after {
+    content: "🏠 Cliquez pour placer le dépôt";
+    position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+    background: rgba(22,163,74,0.95); color: white;
+    padding: 8px 16px; border-radius: 8px;
+    font-size: 0.85rem; font-weight: 600;
+    z-index: 1000; pointer-events: none;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+/* Bouton dépôt actif (vert quand un dépôt est défini) */
+#terrain-btnDepot.has-depot {
+    background: rgba(22,163,74,0.15);
+    border-color: var(--success, #16a34a);
+    color: var(--success, #16a34a);
+}
+#terrain-btnDepot.placing {
+    background: var(--success, #16a34a); color: white; border-color: var(--success, #16a34a);
+    animation: terrainPulse 1.5s infinite;
+}
+@keyframes terrainPulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(22,163,74,0.5); }
+    50%      { box-shadow: 0 0 0 8px rgba(22,163,74,0); }
+}
+
+/* Sélecteur de fin de tournée (3 boutons radio) */
+.terrain-end-modes {
+    display: flex; flex-direction: column; gap: 0.35rem;
+    padding: 0.4rem 0.5rem;
+    background: var(--surface, #fff);
+    border: 1px solid var(--border, #e2e8f0); border-radius: 6px;
+}
+.terrain-end-modes-label {
+    font-size: 0.7rem; font-weight: 600;
+    color: var(--text-secondary, #64748b);
+}
+.terrain-end-modes-label i { color: var(--text-secondary, #94a3b8); }
+.terrain-end-modes-buttons {
+    display: flex; gap: 0.3rem;
+}
+.terrain-end-mode-btn {
+    flex: 1; min-width: 0;
+    display: flex; align-items: center; justify-content: center; gap: 0.3rem;
+    padding: 0.35rem 0.4rem;
+    background: var(--background, #f1f5f9); border: 1px solid var(--border, #cbd5e1);
+    color: var(--text-secondary, #64748b);
+    border-radius: 5px; cursor: pointer;
+    font-size: 0.72rem; font-weight: 600;
+    transition: all 0.15s;
+}
+.terrain-end-mode-btn:hover:not(:disabled) {
+    background: var(--surface-hover, #e2e8f0);
+}
+.terrain-end-mode-btn:disabled {
+    opacity: 0.4; cursor: not-allowed;
+}
+.terrain-end-mode-btn.active {
+    background: var(--primary, #3b82f6); color: white;
+    border-color: var(--primary, #3b82f6);
+    box-shadow: 0 1px 3px rgba(59,130,246,0.3);
+}
+.terrain-end-mode-btn i { font-size: 0.75rem; }
+
+.terrain-end-custom-info {
+    display: flex; align-items: center; gap: 0.4rem;
+    padding: 0.3rem 0.4rem;
+    background: var(--background, #f8fafc); border-radius: 5px;
+    font-size: 0.7rem; color: var(--text-secondary, #64748b);
+}
+.terrain-end-custom-info small { flex: 1; font-family: monospace; }
+
+/* ═══════════ ÉTAPES INTERMÉDIAIRES ═══════════ */
+.terrain-waypoints-block {
+    padding: 0.5rem 0.55rem;
+    background: var(--surface, #fff);
+    border: 1px solid var(--border, #e2e8f0);
+    border-radius: 6px;
+}
+.terrain-waypoints-head {
+    display: flex; align-items: center; gap: 0.4rem;
+    font-size: 0.72rem; font-weight: 600;
+    color: var(--text-secondary, #64748b);
+    margin-bottom: 0.3rem;
+}
+.terrain-waypoints-head > span:first-child { flex: 1; }
+.terrain-waypoints-head b { color: var(--text, #1e293b); }
+.terrain-waypoints-empty {
+    font-size: 0.72rem; color: var(--text-secondary, #94a3b8);
+    font-style: italic; padding: 0.3rem 0;
+}
+.terrain-waypoint-list {
+    display: flex; flex-direction: column; gap: 0.25rem;
+    margin-top: 0.3rem;
+}
+.terrain-waypoint-item {
+    display: flex; align-items: center; gap: 0.4rem;
+    padding: 0.3rem 0.4rem;
+    background: var(--background, #f8fafc);
+    border-radius: 5px;
+    font-size: 0.72rem;
+}
+.terrain-waypoint-badge {
+    width: 20px; height: 20px; border-radius: 50%;
+    background: #7c3aed; color: white;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 0.68rem; flex-shrink: 0;
+}
+.terrain-waypoint-coords {
+    flex: 1; font-family: monospace;
+    color: var(--text-secondary, #64748b);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.terrain-waypoint-rm {
+    color: var(--danger, #dc2626); cursor: pointer; padding: 0 0.3rem;
+    background: transparent; border: none;
+    font-weight: 700; font-size: 1rem; line-height: 1;
+}
+.terrain-waypoint-rm:hover { color: #991b1b; }
+
+/* Marqueur d'étape intermédiaire (drapeau de la couleur tournée) sur la carte */
+.terrain-waypoint-icon {
+    width: 28px; height: 28px;
+    border-radius: 50% 50% 50% 0;
+    transform: rotate(-45deg);
+    border: 2px solid white;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.35);
+    display: flex; align-items: center; justify-content: center;
+    position: relative;
+    cursor: pointer;
+}
+.terrain-waypoint-icon i {
+    transform: rotate(45deg);
+    color: white; font-size: 10px;
+}
+.terrain-waypoint-num {
+    position: absolute; top: -4px; right: -4px;
+    transform: rotate(45deg);
+    width: 14px; height: 14px;
+    background: white; color: #1e293b;
+    border-radius: 50%;
+    font-size: 9px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    border: 1px solid currentColor;
+}
+
+/* Mode placement waypoint actif */
+#terrain-map.placing-waypoint { cursor: crosshair !important; }
+#terrain-map.placing-waypoint::after {
+    content: "🚩 Cliquez pour ajouter une étape (Échap pour terminer)";
+    position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+    background: rgba(124,58,237,0.95); color: white;
+    padding: 8px 16px; border-radius: 8px;
+    font-size: 0.85rem; font-weight: 600;
+    z-index: 1000; pointer-events: none;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+/* Marqueur de point d'arrivée personnalisé (drapeau de couleur tournée) */
+.terrain-endpoint-icon {
+    width: 30px; height: 30px;
+    border: 3px solid white; border-radius: 50% 50% 50% 0;
+    transform: rotate(-45deg);
+    box-shadow: 0 3px 8px rgba(0,0,0,0.4);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+}
+.terrain-endpoint-icon i {
+    transform: rotate(45deg);
+    color: white; font-size: 11px;
+}
+.terrain-endpoint-icon:hover { transform: rotate(-45deg) scale(1.15); }
+
+/* Indicateur mode "placement endpoint actif" */
+#terrain-map.placing-endpoint { cursor: crosshair !important; }
+#terrain-map.placing-endpoint::after {
+    content: "🏁 Cliquez pour placer le point d'arrivée";
+    position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+    background: rgba(220,38,38,0.95); color: white;
+    padding: 8px 16px; border-radius: 8px;
+    font-size: 0.85rem; font-weight: 600;
+    z-index: 1000; pointer-events: none;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+/* Marqueurs de la zone en cours de dessin */
+.terrain-zone-pt {
+    width: 14px; height: 14px; border-radius: 50%;
+    background: #1e293b; border: 3px solid white;
+    box-shadow: 0 0 6px rgba(0,0,0,0.3);
+}
+.terrain-zone-pt-handle {
+    width: 16px; height: 16px;
+    background: #1e293b; border: 3px solid white;
+    box-shadow: 0 0 0 2px rgba(15,23,42,0.25), 0 2px 6px rgba(0,0,0,0.35);
+    cursor: grab;
+    transition: transform 0.1s, box-shadow 0.1s;
+}
+.terrain-zone-pt-handle:hover {
+    transform: scale(1.3);
+    box-shadow: 0 0 0 3px rgba(15,23,42,0.35), 0 3px 8px rgba(0,0,0,0.45);
+}
+.terrain-zone-pt-handle:active { cursor: grabbing; }
+.terrain-zone-hint {
+    background: rgba(15,23,42,0.92); color: white;
+    padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: 600;
+    white-space: nowrap;
+}
+
+[data-theme="dark"] .terrain-zone-pt { background: #f1f5f9; border-color: #1e293b; }
+
+/* ═══════════ RESPONSIVE ═══════════ */
+@media (max-width: 900px) {
+    .terrain-layout { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
+    .terrain-layout.sidebar-collapsed { grid-template-rows: 1fr 0; }
+    .terrain-side { border-left: none; border-top: 1px solid var(--border, #e2e8f0); max-height: 50vh; }
+    .terrain-btn-toggle { transform: rotate(90deg); }
+    .terrain-layout.sidebar-collapsed .terrain-btn-toggle { transform: rotate(-90deg); }
+    .terrain-filter { max-width: 110px; font-size: 0.75rem; }
+}
+.terrain-layout.sidebar-collapsed .terrain-btn-toggle i { transform: rotate(180deg); }
+
+/* ═══════════ BANDEAU RGPD ═══════════ */
+.terrain-rgpd-banner {
+    display: flex; gap: 0.7rem; align-items: flex-start;
+    padding: 0.7rem 0.9rem;
+    background: linear-gradient(135deg, rgba(245,158,11,0.12), rgba(245,158,11,0.05));
+    border: 1px solid rgba(245,158,11,0.35);
+    border-left: 4px solid var(--warning, #f59e0b);
+    border-radius: 8px;
+    margin-bottom: 0.8rem;
+    font-size: 0.78rem; color: var(--text, #1e293b);
+}
+.terrain-rgpd-banner > i {
+    color: var(--warning, #f59e0b); font-size: 1.1rem;
+    margin-top: 1px;
+}
+.terrain-rgpd-banner b { color: var(--warning, #d97706); }
+.terrain-rgpd-banner small { color: var(--text-secondary, #64748b); line-height: 1.4; }
+
+/* ═══════════ BOUTON SCAN (dans la barre d'actions) ═══════════ */
+.terrain-btn.terrain-btn-scan {
+    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+    color: white; border-color: #2563eb;
+    font-weight: 700;
+}
+.terrain-btn.terrain-btn-scan:hover:not(:disabled) {
+    background: linear-gradient(135deg, #1d4ed8, #1e40af);
+    border-color: #1e40af;
+    box-shadow: 0 2px 8px rgba(37,99,235,0.4);
+}
+.terrain-btn.terrain-btn-scan:disabled {
+    background: var(--background, #f1f5f9); color: var(--text-secondary, #94a3b8);
+    border-color: var(--border, #cbd5e1);
+}
+.terrain-btn.terrain-btn-scan i { font-size: 0.95rem; }
+
+/* ═══════════ DIAGNOSTIC SCAN (debug panel dans la modale) ═══════════ */
+.terrain-scan-diagnostic {
+    margin-bottom: 0.7rem;
+    background: var(--background, #f8fafc);
+    border: 1px solid var(--border, #e2e8f0);
+    border-radius: 8px;
+    padding: 0.6rem 0.8rem;
+    font-size: 0.78rem;
+}
+.terrain-scan-diagnostic summary {
+    cursor: pointer; font-weight: 600;
+    color: var(--text-secondary, #64748b);
+    user-select: none;
+}
+.terrain-scan-diagnostic summary:hover { color: var(--text, #1e293b); }
+.terrain-scan-diagnostic-grid {
+    margin-top: 0.5rem;
+    display: grid; grid-template-columns: 1fr auto; gap: 0.2rem 0.6rem;
+    font-size: 0.75rem;
+}
+.terrain-scan-diagnostic-grid > div:nth-child(2n+1) { color: var(--text-secondary, #64748b); }
+.terrain-scan-diagnostic-grid > div:nth-child(2n) { font-family: monospace; font-weight: 600; }
+.terrain-scan-diagnostic-grid .ok    { color: var(--success, #16a34a); }
+.terrain-scan-diagnostic-grid .ko    { color: var(--danger, #dc2626); }
+.terrain-scan-diagnostic-grid .warn  { color: var(--warning, #f59e0b); }
+
+/* ═══════════ MODALES ═══════════ */
+.terrain-modal-overlay {
+    display: none;
+    position: fixed; inset: 0; z-index: 2000;
+    background: rgba(15,23,42,0.65);
+    backdrop-filter: blur(3px);
+    align-items: center; justify-content: center;
+    padding: 16px;
+    animation: terrainFadeIn 0.2s ease;
+}
+.terrain-modal-overlay.open { display: flex; }
+@keyframes terrainFadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+.terrain-modal {
+    background: var(--surface, #fff);
+    border-radius: 14px;
+    width: 100%; max-width: 480px; max-height: calc(100vh - 32px);
+    display: flex; flex-direction: column;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    animation: terrainSlideUp 0.25s ease;
+}
+@keyframes terrainSlideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+.terrain-modal-head {
+    padding: 0.9rem 1.1rem;
+    display: flex; justify-content: space-between; align-items: center;
+    border-bottom: 1px solid var(--border, #e2e8f0);
+    font-size: 1.05rem; font-weight: 700; color: var(--text, #1e293b);
+}
+.terrain-modal-head i { color: var(--primary, #3b82f6); margin-right: 0.4rem; }
+.terrain-modal-close {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: var(--background, #f1f5f9); border: none;
+    color: var(--text-secondary, #64748b);
+    cursor: pointer; font-size: 1.4rem; line-height: 1;
+    display: flex; align-items: center; justify-content: center;
+}
+.terrain-modal-close:hover { background: var(--danger-light, #fee2e2); color: var(--danger, #dc2626); }
+
+.terrain-modal-body {
+    padding: 1rem 1.1rem;
+    overflow-y: auto; flex: 1;
+}
+.terrain-modal-actions {
+    padding: 0.75rem 1.1rem;
+    border-top: 1px solid var(--border, #e2e8f0);
+    display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;
+}
+
+/* ═══ Modale scan ═══ */
+.terrain-modal-scan { max-width: 420px; }
+.terrain-scan-camera {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    background: #000;
+    border-radius: 10px;
+    overflow: hidden;
+    position: relative;
+}
+.terrain-scan-camera video { width: 100% !important; height: 100% !important; object-fit: cover; }
+.terrain-scan-camera #terrain-scanCameraInner { width: 100%; height: 100%; }
+.terrain-scan-error {
+    margin-top: 0.7rem; padding: 0.6rem 0.8rem;
+    background: var(--warning-light, #fef3c7); border-left: 3px solid var(--warning, #f59e0b);
+    border-radius: 6px; font-size: 0.8rem; color: #92400e;
+}
+.terrain-scan-divider {
+    text-align: center; margin: 1rem 0 0.6rem;
+    color: var(--text-secondary, #94a3b8); font-size: 0.75rem;
+    text-transform: uppercase; letter-spacing: 0.08em;
+    position: relative;
+}
+.terrain-scan-divider::before, .terrain-scan-divider::after {
+    content: ''; position: absolute; top: 50%;
+    width: calc(50% - 60px); height: 1px;
+    background: var(--border, #e2e8f0);
+}
+.terrain-scan-divider::before { left: 0; }
+.terrain-scan-divider::after  { right: 0; }
+.terrain-scan-input-row { display: flex; gap: 0.5rem; }
+.terrain-scan-input-row input {
+    flex: 1; padding: 0.65rem 0.8rem;
+    border: 1px solid var(--border, #cbd5e1); border-radius: 8px;
+    background: var(--background, #f8fafc);
+    font-size: 0.95rem; font-family: monospace;
+}
+.terrain-scan-input-row input:focus {
+    outline: none; border-color: var(--primary, #3b82f6); background: var(--surface, #fff);
+}
+
+/* ═══ Modale colis (détails après scan) ═══ */
+.terrain-modal-colis { max-width: 520px; }
+.terrain-modal-colis .terrain-modal-head { background: linear-gradient(135deg, #3b82f6, #2563eb); color: white; border-bottom: none; }
+.terrain-modal-colis .terrain-modal-head i { color: white; }
+.terrain-modal-colis .terrain-modal-close { background: rgba(255,255,255,0.2); color: white; }
+.terrain-modal-colis .terrain-modal-close:hover { background: rgba(255,255,255,0.35); color: white; }
+
+.terrain-colis-row {
+    display: flex; align-items: flex-start; gap: 0.6rem;
+    padding: 0.55rem 0; border-bottom: 1px solid var(--border, #f1f5f9);
+}
+.terrain-colis-row:last-child { border-bottom: none; }
+.terrain-colis-row .ico {
+    width: 32px; height: 32px; border-radius: 8px;
+    background: var(--background, #f1f5f9); color: var(--primary, #3b82f6);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.9rem; flex-shrink: 0;
+}
+.terrain-colis-row .ico.success { background: rgba(22,163,74,0.12); color: var(--success, #16a34a); }
+.terrain-colis-row .ico.warning { background: rgba(245,158,11,0.12); color: var(--warning, #f59e0b); }
+.terrain-colis-row .lbl {
+    font-size: 0.7rem; font-weight: 700; text-transform: uppercase;
+    color: var(--text-secondary, #94a3b8); letter-spacing: 0.04em;
+    margin-bottom: 0.1rem;
+}
+.terrain-colis-row .val {
+    font-size: 0.95rem; color: var(--text, #1e293b);
+    word-break: break-word;
+}
+.terrain-colis-row .val.mono { font-family: monospace; font-size: 0.85rem; }
+.terrain-colis-row .val.muted { color: var(--text-secondary, #94a3b8); font-style: italic; }
+.terrain-colis-row .tour-pill {
+    display: inline-block; padding: 0.15rem 0.55rem; border-radius: 999px;
+    color: white; font-size: 0.75rem; font-weight: 700;
+}
+
+.terrain-action-btn {
+    display: flex; align-items: center; justify-content: center; gap: 0.4rem;
+    padding: 0.7rem 0.5rem; border-radius: 9px;
+    background: var(--background, #f1f5f9); border: 1px solid var(--border, #cbd5e1);
+    color: var(--text, #1e293b); cursor: pointer;
+    font-size: 0.85rem; font-weight: 600;
+    text-decoration: none;
+    transition: all 0.15s;
+}
+.terrain-action-btn:hover { background: var(--surface-hover, #e2e8f0); transform: translateY(-1px); }
+.terrain-action-btn.call    { background: rgba(22,163,74,0.12); color: var(--success, #16a34a); border-color: rgba(22,163,74,0.3); }
+.terrain-action-btn.call:hover { background: rgba(22,163,74,0.2); }
+.terrain-action-btn.nav     { background: rgba(59,130,246,0.12); color: var(--primary, #2563eb); border-color: rgba(59,130,246,0.3); }
+.terrain-action-btn.nav:hover { background: rgba(59,130,246,0.2); }
+.terrain-action-btn.sms     { background: rgba(245,158,11,0.12); color: var(--warning, #d97706); border-color: rgba(245,158,11,0.3); }
+.terrain-action-btn.sms:hover { background: rgba(245,158,11,0.2); }
+.terrain-action-btn.email   { background: rgba(139,92,246,0.12); color: #7c3aed; border-color: rgba(139,92,246,0.3); }
+.terrain-action-btn.email:hover { background: rgba(139,92,246,0.2); }
+.terrain-action-btn.delivered { background: var(--success, #16a34a); color: white; border-color: var(--success, #16a34a); grid-column: span 2; }
+.terrain-action-btn.delivered:hover { background: #15803d; }
+.terrain-action-btn.delivered.is-done {
+    background: var(--background, #f1f5f9); color: var(--success, #16a34a);
+    border-color: var(--success, #16a34a); cursor: default;
+}
+.terrain-action-btn:disabled, .terrain-action-btn[aria-disabled="true"] {
+    opacity: 0.45; cursor: not-allowed; pointer-events: none;
+}
+
+/* Marqueur "colis livré" sur la carte */
+.terrain-marker.delivered { background: #16a34a !important; opacity: 0.7; }
+.terrain-marker.delivered::before {
+    content: '✓'; color: white; font-weight: 900; font-size: 11px;
+    display: flex; align-items: center; justify-content: center;
+    width: 100%; height: 100%;
+}
+
+/* Popup carte enrichi */
+.terrain-popup {
+    font-family: sans-serif; font-size: 13px; min-width: 220px;
+    line-height: 1.4;
+}
+.terrain-popup .head {
+    margin: -10px -14px 8px; padding: 8px 14px;
+    background: linear-gradient(135deg, #3b82f6, #2563eb); color: white;
+    border-radius: 12px 12px 0 0;
+    font-weight: 700;
+}
+.terrain-popup .head.delivered { background: linear-gradient(135deg, #16a34a, #15803d); }
+.terrain-popup .field { margin: 4px 0; }
+.terrain-popup .lbl { font-size: 10px; text-transform: uppercase; color: #94a3b8; font-weight: 700; letter-spacing: 0.04em; }
+.terrain-popup .val { color: #1e293b; word-break: break-word; }
+.terrain-popup .val.mono { font-family: monospace; font-size: 11px; }
+.terrain-popup .actions {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 4px;
+    margin-top: 10px; padding-top: 8px; border-top: 1px solid #e2e8f0;
+}
+.terrain-popup .actions a, .terrain-popup .actions button {
+    display: flex; align-items: center; justify-content: center; gap: 4px;
+    padding: 6px 8px; border-radius: 6px;
+    background: #f1f5f9; border: 1px solid #cbd5e1;
+    color: #1e293b; text-decoration: none; cursor: pointer;
+    font-size: 11px; font-weight: 600;
+}
+.terrain-popup .actions a:hover, .terrain-popup .actions button:hover { background: #e2e8f0; }
+.terrain-popup .actions .call  { background: rgba(22,163,74,0.12); color: #16a34a; border-color: rgba(22,163,74,0.3); }
+.terrain-popup .actions .nav   { background: rgba(59,130,246,0.12); color: #2563eb; border-color: rgba(59,130,246,0.3); }
+.terrain-popup .actions .sms   { background: rgba(245,158,11,0.12); color: #d97706; border-color: rgba(245,158,11,0.3); }
+.terrain-popup .actions .email { background: rgba(139,92,246,0.12); color: #7c3aed; border-color: rgba(139,92,246,0.3); }
+
+/* ═══════════════════════════════════════════════════════════════ */
+/* ONGLET MODE SCAN — affichage XXL pour douchette ou caméra      */
+/* ═══════════════════════════════════════════════════════════════ */
+.tab-content#tab-scan.active {
+    padding: 0 !important;
+    margin: 0 !important;
+}
+.scan-page {
+    display: flex; flex-direction: column;
+    min-height: calc(100vh - 60px);
+    width: 100%; overflow: hidden;
+    background: var(--background, #f8fafc);
+}
+.scan-header {
+    flex-shrink: 0;
+    background: var(--surface, #fff);
+    border-bottom: 1px solid var(--border, #e2e8f0);
+    padding: 1rem 1.5rem;
+    display: flex; gap: 1rem; align-items: center;
+    flex-wrap: wrap; justify-content: space-between;
+}
+.scan-header-left { flex: 1 1 300px; min-width: 0; }
+.scan-header h2 {
+    margin: 0 0 0.3rem; font-size: 1.4rem;
+    color: var(--text, #1e293b);
+    display: flex; align-items: center; gap: 0.5rem;
+}
+.scan-header h2 i { color: var(--primary, #3b82f6); }
+.scan-header-hint {
+    font-size: 0.82rem; color: var(--text-secondary, #64748b);
+    display: flex; align-items: center; gap: 0.4rem;
+}
+.scan-status-led {
+    color: #94a3b8; font-size: 1.2rem; line-height: 1;
+    animation: scanPulse 1.5s infinite;
+}
+.scan-status-led.active { color: #16a34a; }
+.scan-status-led.error  { color: #dc2626; animation: none; }
+@keyframes scanPulse {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.35; }
+}
+.scan-header-right { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; }
+.scan-stats {
+    display: flex; gap: 0.8rem;
+    background: var(--background, #f1f5f9);
+    padding: 0.5rem 1rem; border-radius: 10px;
+}
+.scan-stat { display: flex; flex-direction: column; align-items: center; line-height: 1; }
+.scan-stat-num { font-size: 1.4rem; font-weight: 700; color: var(--text, #1e293b); }
+.scan-stat-lbl { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary, #94a3b8); margin-top: 2px; }
+.scan-btn {
+    display: inline-flex; align-items: center; gap: 0.4rem;
+    background: var(--background, #f1f5f9); border: 1px solid var(--border, #cbd5e1);
+    color: var(--text, #1e293b); padding: 0.5rem 0.9rem; border-radius: 8px;
+    font-size: 0.85rem; font-weight: 600; cursor: pointer;
+    transition: all 0.15s;
+}
+.scan-btn:hover { background: var(--surface-hover, #e2e8f0); }
+.scan-btn-cam { background: rgba(59,130,246,0.1); color: #2563eb; border-color: rgba(59,130,246,0.3); }
+.scan-btn-cam:hover { background: rgba(59,130,246,0.2); }
+.scan-btn-cam.active { background: #2563eb; color: white; border-color: #2563eb; }
+
+/* Input scan principal — gros et bien visible */
+.scan-input-bar {
+    flex-shrink: 0;
+    margin: 1rem 1.5rem 0;
+    background: var(--surface, #fff);
+    border: 2px solid var(--primary, #3b82f6);
+    border-radius: 14px;
+    padding: 0.8rem 1rem;
+    display: flex; align-items: center; gap: 0.7rem;
+    box-shadow: 0 4px 12px rgba(59,130,246,0.15);
+    transition: all 0.15s;
+}
+.scan-input-bar.focused {
+    border-color: #16a34a;
+    box-shadow: 0 4px 18px rgba(22,163,74,0.25);
+}
+.scan-input-bar > i.fa-search {
+    color: var(--primary, #3b82f6); font-size: 1.4rem; flex-shrink: 0;
+}
+.scan-input-bar.focused > i.fa-search { color: #16a34a; }
+.scan-input-bar input {
+    flex: 1; min-width: 0;
+    border: none; background: transparent;
+    font-size: 1.3rem; font-family: monospace; font-weight: 600;
+    color: var(--text, #1e293b); padding: 0.3rem 0;
+}
+.scan-input-bar input:focus { outline: none; }
+.scan-input-keep-focus {
+    background: rgba(22,163,74,0.15); color: #16a34a;
+    padding: 0.35rem 0.7rem; border-radius: 999px;
+    font-size: 0.72rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.04em;
+    display: inline-flex; align-items: center; gap: 0.3rem;
+    flex-shrink: 0;
+}
+.scan-input-keep-focus.lost { background: rgba(220,38,38,0.15); color: #dc2626; }
+
+/* Caméra (smartphone) */
+.scan-camera-area {
+    position: relative; margin: 1rem 1.5rem 0;
+    width: calc(100% - 3rem); max-width: 960px; align-self: center;
+    border-radius: 12px; overflow: hidden;
+    background: #000; aspect-ratio: 16 / 10;
+}
+@media (max-width: 768px) {
+    .scan-camera-area { margin: 0.75rem 0 0; width: 100%; border-radius: 0; aspect-ratio: 3 / 4; }
+}
+.scan-camera-area #scan-cameraInner { width: 100%; height: 100%; }
+.scan-camera-area video { width: 100% !important; height: 100% !important; object-fit: cover; }
+.scan-btn-cam-close {
+    position: absolute; top: 8px; right: 8px;
+    width: 32px; height: 32px; border-radius: 50%;
+    background: rgba(0,0,0,0.6); color: white; border: none;
+    font-size: 1rem; cursor: pointer; z-index: 100;
+}
+.scan-btn-cam-close:hover { background: rgba(220,38,38,0.85); }
+
+/* Zone résultat XXL */
+.scan-result {
+    flex: 1;
+    margin: 1.2rem 1.5rem 1.5rem;
+    background: var(--surface, #fff);
+    border: 1px solid var(--border, #e2e8f0);
+    border-radius: 14px;
+    padding: 1.5rem;
+    overflow-y: auto;
+    display: flex; flex-direction: column;
+    min-height: 280px;
+}
+.scan-result-empty {
+    flex: 1;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; color: var(--text-secondary, #94a3b8);
+}
+.scan-result-empty > i {
+    font-size: 4rem; opacity: 0.4; margin-bottom: 1rem;
+}
+.scan-result-empty-title { font-size: 1.4rem; font-weight: 700; color: var(--text-secondary, #64748b); margin-bottom: 0.4rem; }
+.scan-result-empty-text { font-size: 0.9rem; max-width: 480px; line-height: 1.5; }
+
+/* Résultat trouvé : XXL épuré (tracking + tournée + adresse) */
+.scan-xxl-tracking {
+    background: linear-gradient(135deg, #16a34a, #15803d);
+    color: white;
+    padding: 1.4rem 1.5rem;
+    border-radius: 14px;
+    margin-bottom: 1rem;
+    text-align: center;
+}
+.scan-xxl-tracking.delivered {
+    background: linear-gradient(135deg, #6b7280, #4b5563);
+}
+.scan-xxl-tracking-label {
+    font-size: 0.85rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    opacity: 0.9;
+    margin-bottom: 0.4rem;
+}
+.scan-xxl-tracking-bc {
+    font-family: monospace;
+    font-size: 2.4rem;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    word-break: break-all;
+    line-height: 1.1;
+}
+
+.scan-xxl-tour {
+    background: var(--surface, #fff);
+    border: 3px solid var(--border, #e2e8f0);
+    border-radius: 14px;
+    padding: 1.2rem 1.5rem;
+    margin-bottom: 1rem;
+}
+.scan-xxl-tour-label {
+    font-size: 0.85rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-secondary, #64748b);
+    margin-bottom: 0.6rem;
+}
+.scan-xxl-tour-label i { margin-right: 0.3rem; }
+.scan-xxl-tour-name {
+    font-size: 2.2rem;
+    font-weight: 800;
+    line-height: 1.15;
+    word-break: break-word;
+}
+.scan-xxl-tour-detail {
+    margin-top: 0.7rem;
+    display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: center;
+}
+.scan-xxl-pos {
+    color: white;
+    padding: 0.4rem 1rem;
+    border-radius: 999px;
+    font-size: 1.1rem;
+    font-weight: 700;
+}
+.scan-xxl-livreur {
+    font-size: 1.15rem;
+    font-weight: 600;
+    color: var(--text, #1e293b);
+}
+.scan-xxl-livreur i { color: var(--text-secondary, #64748b); margin-right: 0.3rem; }
+.scan-xxl-tour-unassigned {
+    background: rgba(245,158,11,0.08);
+    border-color: rgba(245,158,11,0.5);
+}
+.scan-xxl-tour-unassigned .scan-xxl-tour-label,
+.scan-xxl-tour-unassigned .scan-xxl-tour-name { color: #d97706; }
+.scan-xxl-tour-unassigned .scan-xxl-tour-detail {
+    color: var(--text-secondary, #64748b);
+    font-size: 0.9rem;
+}
+
+.scan-xxl-address {
+    background: var(--surface, #fff);
+    border: 3px solid var(--primary, #3b82f6);
+    border-radius: 14px;
+    padding: 1.2rem 1.5rem;
+    margin-bottom: 1rem;
+}
+.scan-xxl-address-label {
+    font-size: 0.85rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--primary, #2563eb);
+    margin-bottom: 0.6rem;
+}
+.scan-xxl-address-label i { margin-right: 0.3rem; }
+.scan-xxl-address-rue {
+    font-size: 1.8rem;
+    font-weight: 600;
+    color: var(--text, #1e293b);
+    line-height: 1.3;
+    word-break: break-word;
+}
+.scan-xxl-address-cpville {
+    margin-top: 0.5rem;
+    font-size: 2.2rem;
+    font-weight: 800;
+    color: var(--primary, #2563eb);
+    letter-spacing: 0.02em;
+}
+.scan-xxl-muted {
+    color: var(--text-secondary, #94a3b8);
+    font-style: italic;
+    font-size: 1.3rem;
+}
+
+/* Résultat NON trouvé */
+.scan-notfound {
+    background: linear-gradient(135deg, #dc2626, #991b1b);
+    color: white;
+    padding: 1.5rem;
+    border-radius: 12px;
+    text-align: center;
+}
+.scan-notfound > i {
+    font-size: 3.5rem; opacity: 0.85;
+    margin-bottom: 0.5rem;
+}
+.scan-notfound-title { font-size: 1.5rem; font-weight: 700; margin-bottom: 0.3rem; }
+.scan-notfound-bc { font-family: monospace; font-size: 1.2rem; opacity: 0.95; }
+.scan-notfound-hint { font-size: 0.9rem; opacity: 0.85; margin-top: 0.6rem; }
+
+/* Bouton retour rapide à la carte depuis le scan */
+.scan-result-actions {
+    display: flex; gap: 0.5rem; flex-wrap: wrap;
+}
+.scan-result-actions .scan-btn { font-size: 0.95rem; padding: 0.7rem 1.2rem; }
+.scan-result-actions .scan-btn-primary {
+    background: var(--primary, #3b82f6); color: white;
+    border-color: var(--primary, #3b82f6);
+}
+.scan-result-actions .scan-btn-primary:hover { background: var(--primary-hover, #2563eb); }
+.scan-result-actions .scan-btn-success {
+    background: #16a34a; color: white; border-color: #16a34a;
+}
+.scan-result-actions .scan-btn-success:hover { background: #15803d; }
+.scan-result-actions .scan-btn-success.is-done {
+    background: var(--background, #f1f5f9); color: #16a34a;
+}
+
+/* Sur mobile : ajuster un peu sans réduire excessivement */
+@media (max-width: 700px) {
+    .scan-xxl-tracking-bc { font-size: 1.8rem; }
+    .scan-xxl-tour-name { font-size: 1.7rem; }
+    .scan-xxl-address-rue { font-size: 1.4rem; }
+    .scan-xxl-address-cpville { font-size: 1.7rem; }
+    .scan-input-bar input { font-size: 1.1rem; }
+}
+
+/* FIX zoom Android : empêcher le clavier virtuel de s'ouvrir
+   (la douchette HID continue de fonctionner) */
+.scan-input-bar input[inputmode="none"] { caret-color: var(--primary, #3b82f6); }
+

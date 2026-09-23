@@ -1,0 +1,85 @@
+/* ════════════════════════════════════════════════════════════════════
+ * ameliorations.css — ajouts v55 (le design d'origine est dans app.css,
+ * inchangé) : écran de chargement, état de synchronisation, accessibilité,
+ * ergonomie mobile.
+ * ════════════════════════════════════════════════════════════════════ */
+
+/* ---------- Écran de chargement (avant connexion / chargement cloud) ---------- */
+.boot-loader {
+    position: fixed; inset: 0; z-index: 9000;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.9rem;
+    background: var(--background); color: var(--text-secondary);
+    font-family: 'Inter', system-ui, sans-serif; font-size: 0.95rem;
+}
+.boot-loader i { font-size: 2.2rem; color: var(--primary); animation: pulse 1.4s ease-in-out infinite; }
+.boot-noscript { padding: 2rem; text-align: center; font-weight: 600; color: var(--danger); }
+
+/* ---------- Indicateur d'état de synchronisation ---------- */
+.sync-indicator { max-width: 100%; }
+.sync-indicator .sync-text { display: inline-flex; flex-wrap: wrap; gap: 0.35rem; align-items: baseline; }
+.sync-indicator #saveIndicatorTime { font-weight: 500; opacity: 0.85; font-size: 0.72rem; }
+.sync-indicator.st-local    { background: rgba(22, 163, 74, 0.25); }
+.sync-indicator.st-synced   { background: rgba(22, 163, 74, 0.35); }
+.sync-indicator.st-syncing  { background: rgba(43, 110, 143, 0.45); }
+.sync-indicator.st-offline  { background: rgba(232, 89, 12, 0.45); }
+.sync-indicator.st-conflict { background: rgba(232, 89, 12, 0.75); }
+.sync-indicator.st-error    { background: rgba(217, 53, 43, 0.75); }
+.sync-indicator:focus-visible { outline: 2px solid var(--secondary); outline-offset: 2px; }
+
+@media (max-width: 768px) {
+    .sync-indicator #saveIndicatorTime { display: none; }
+    .sync-indicator { padding: 0.45rem 0.7rem; }
+}
+@media (max-width: 480px) {
+    .sync-indicator #syncStatusLabel { display: none; }
+}
+
+/* ---------- Accessibilité ---------- */
+.sr-only {
+    position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
+[role="button"]:focus-visible, .config-tab:focus-visible, .import-tab-btn:focus-visible,
+select:focus-visible, textarea:focus-visible, input:focus-visible, .theme-toggle:focus-visible,
+.settings-toggle:focus-visible, .modal-close:focus-visible {
+    outline: 2px solid var(--secondary);
+    outline-offset: 2px;
+}
+[role="button"] { cursor: pointer; }
+
+/* ---------- Mobile : zones tactiles d'au moins ~40 px ---------- */
+@media (pointer: coarse) {
+    .btn, .btn-sm, .nav-item, .modal-close, .config-tab, .import-tab-btn { min-height: 40px; }
+    .btn-sm { min-width: 40px; }
+    .form-input, .form-select, select, input[type="text"], input[type="number"], input[type="email"], input[type="password"] { min-height: 40px; }
+}
+
+/* ---------- Mobile : pas de défilement horizontal de la page ---------- */
+@media (max-width: 768px) {
+    .modal { max-width: calc(100vw - 16px) !important; }
+    .modal-body { overflow-x: auto; }
+}
+
+/* ---------- En-tête : les actions passent à la ligne sur petit écran ---------- */
+@media (max-width: 768px) {
+    .header-actions { flex-wrap: wrap; justify-content: flex-end; max-width: 100%; }
+    .header-actions .btn-sm { padding: 0.4rem 0.6rem; }
+}
+@media (max-width: 480px) {
+    .header-actions .btn-sm { font-size: 0; gap: 0; }          /* icône seule (texte gardé pour les lecteurs d'écran) */
+    .header-actions .btn-sm i { font-size: 0.9rem; }
+    #cloudUserBadge span { max-width: 9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
+
+/* ---------- Tutoriel : la fenêtre d'accueil tient dans l'écran du téléphone ---------- */
+.tutorial-welcome { box-sizing: border-box; max-width: min(520px, calc(100vw - 24px)); max-height: 90vh; overflow-y: auto; }
+.tutorial-tooltip { box-sizing: border-box; max-width: calc(100vw - 24px); }
+
+/* ---------- Barres de boutons d'en-tête de carte : retour à la ligne sur mobile ---------- */
+@media (max-width: 768px) {
+    .card-header { flex-wrap: wrap; gap: 0.5rem; }
+    .card-header > div[style*="display: flex"], .card-header > div[style*="display:flex"] { flex-wrap: wrap; }
+}
+@media (max-width: 768px) {
+    .historique-nav-mois { flex-wrap: wrap; gap: 0.5rem; justify-content: center !important; }
+}
