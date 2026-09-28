@@ -414,21 +414,67 @@
         }
 
         /**
-         * Agrège les transferts d'un mois par (compte, date).
-         * @returns {{[cle:string]: {cedes:number, recus:number}}}  clé « compte|date »
+         * v56 — Résout le compte EPOD réel d'un destinataire de transfert.
+         * Le menu proposait à la fois les comptes de l'export (« Hamza-Colmar »)
+         * et les noms des fiches livreurs (« Hamza ») : choisir la fiche créait
+         * une carte fantôme « Hamza » au lieu de créditer « Hamza-Colmar ».
+         * Ici, un nom qui n'est pas un compte du mois est rattaché au compte
+         * unique qui correspond à la même fiche livreur. Cela répare aussi les
+         * transferts déjà enregistrés, sans modifier les données.
          */
-        function calculerAjustementsTransferts(mois) {
+        function resoudreCompteTransfert(nom, monthData, _cache) {
+            if (!nom || !monthData || monthData[nom]) return nom;
+            if (typeof matchLivreur !== 'function') return nom;
+            const cache = _cache || {};
+            const cle = '§' + nom;
+            if (cle in cache) return cache[cle];
+            const fiche = matchLivreur(nom);
+            let res = nom;
+            if (fiche) {
+                const comptes = Object.keys(monthData).filter(c => {
+                    const k = '#' + c;
+                    if (!(k in cache)) cache[k] = matchLivreur(c);
+                    return cache[k] === fiche;
+                });
+                if (comptes.length === 1) res = comptes[0];
+            }
+            cache[cle] = res;
+            return res;
+        }
+
+        /** Un transfert porte-t-il sur une journée entière ? (v56, + anciens transferts « Journée entière réaffectée ») */
+        function estTransfertJournee(t) {
+            return !!(t && (t.journee === true || (t.mode === 'manuel' && t.note === 'Journée entière réaffectée')));
+        }
+
+        /**
+         * Agrège les transferts d'un mois par (compte, date).
+         * Pour une journée entière, les colis PUDO suivent aussi la journée
+         * (ils comptent dans le % PUDO et la paie du livreur qui a réellement roulé).
+         * @returns {{[cle:string]: {cedes:number, recus:number, cedesPudo:number, recusPudo:number, versJournee:string[], deJournee:string[]}}}
+         */
+        function calculerAjustementsTransferts(mois, monthData) {
             const ajust = {};
-            const add = (compte, date, champ, nb) => {
+            const cache = {};
+            const get = (compte, date) => {
                 const k = compte + '|' + date;
-                if (!ajust[k]) ajust[k] = { cedes: 0, recus: 0 };
-                ajust[k][champ] += nb;
+                if (!ajust[k]) ajust[k] = { cedes: 0, recus: 0, cedesPudo: 0, recusPudo: 0, versJournee: [], deJournee: [] };
+                return ajust[k];
             };
             getTransfertsMois(mois).forEach(t => {
                 const nb = Number(t.nb) || 0;
                 if (nb <= 0 || !t.date || !t.de || !t.vers) return;
-                add(t.de, t.date, 'cedes', nb);
-                add(t.vers, t.date, 'recus', nb);
+                const de = resoudreCompteTransfert(t.de, monthData, cache);
+                const vers = resoudreCompteTransfert(t.vers, monthData, cache);
+                if (de === vers) return;   // transfert vers soi-même : sans effet
+                const src = get(de, t.date), dst = get(vers, t.date);
+                src.cedes += nb; dst.recus += nb;
+                if (estTransfertJournee(t)) {
+                    const jourSrc = monthData && monthData[de] && monthData[de].jours && monthData[de].jours[t.date];
+                    const pudo = jourSrc ? (Number(jourSrc.pudo) || 0) : 0;
+                    src.cedesPudo += pudo; dst.recusPudo += pudo;
+                    src.versJournee.push(vers); dst.deJournee.push(de);
+                }
             });
             return ajust;
         }
@@ -436,16 +482,12 @@
         /**
          * Renvoie une COPIE des données d'un mois enrichie des transferts.
          * Chaque journée reçoit .cedes / .recus ; les compteurs bruts (livres,
-         * echecs, pudo…) ne sont pas touchés.
+         * echecs…) ne sont pas touchés. Pour une journée entière transférée,
+         * .pudo suit la journée (la valeur d'origine reste dans .pudoBrut).
          */
         function appliquerTransfertsMois(monthData, mois) {
             if (!monthData) return monthData;
-            const ajust = calculerAjustementsTransferts(mois);
-            // v46 — même sans aucun transfert, on renvoie des objets porteurs de
-            // totalRemunerables / totalCedes / totalRecus. Auparavant les données
-            // étaient renvoyées telles quelles et ces champs manquaient, obligeant
-            // chaque point d'affichage à gérer le cas « champ absent » — source
-            // silencieuse d'incohérences entre les écrans.
+            const ajust = calculerAjustementsTransferts(mois, monthData);
             if (!Object.keys(ajust).length) {
                 const tel = {};
                 Object.entries(monthData).forEach(([compte, liv]) => {
@@ -458,49 +500,44 @@
                 });
                 return tel;
             }
+            const vide = () => ({ livres: 0, prevus: 0, pudo: 0, echecs: 0, routes: [], codesPostaux: [], routeColis: {}, cedes: 0, recus: 0 });
             const copie = {};
-            Object.entries(monthData).forEach(([compte, liv]) => {
+            const comptes = new Set(Object.keys(monthData));
+            Object.keys(ajust).forEach(k => comptes.add(k.slice(0, k.lastIndexOf('|'))));
+            comptes.forEach(compte => {
+                const liv = monthData[compte] || { jours: {}, totalLivres: 0, totalPrevus: 0, totalPudo: 0, totalEchecs: 0 };
                 const jours = {};
-                let totalCedes = 0, totalRecus = 0;
-                Object.entries(liv.jours || {}).forEach(([date, j]) => {
+                let totalCedes = 0, totalRecus = 0, deltaPudo = 0;
+                const dates = new Set(Object.keys(liv.jours || {}));
+                Object.keys(ajust).forEach(k => {
+                    const i = k.lastIndexOf('|');
+                    if (k.slice(0, i) === compte) dates.add(k.slice(i + 1));
+                });
+                dates.forEach(date => {
+                    const j = (liv.jours || {})[date];
                     const a = ajust[compte + '|' + date];
-                    if (a) {
-                        // On ne peut pas céder plus de colis qu'on n'en a livrés
-                        const cedes = Math.min(a.cedes, Number(j.livres) || 0);
-                        jours[date] = { ...j, cedes, recus: a.recus };
-                        totalCedes += cedes; totalRecus += a.recus;
-                    } else {
-                        jours[date] = j;
-                    }
+                    if (!a) { jours[date] = j; return; }
+                    const base = j || vide();
+                    if (!j && a.recus <= 0) return;
+                    // On ne peut pas céder plus de colis qu'on n'en a livrés
+                    const cedes = Math.min(a.cedes, Number(base.livres) || 0);
+                    const pudoBrut = Number(base.pudo) || 0;
+                    const pudo = Math.max(0, pudoBrut - Math.min(a.cedesPudo, pudoBrut)) + a.recusPudo;
+                    jours[date] = { ...base, cedes, recus: a.recus, pudo, pudoBrut,
+                        transfereeVers: a.versJournee.length ? a.versJournee.slice() : undefined,
+                        recueDe: a.deJournee.length ? a.deJournee.slice() : undefined };
+                    totalCedes += cedes; totalRecus += a.recus; deltaPudo += pudo - pudoBrut;
                 });
-                // Journées où le livreur n'a QUE des colis reçus (il n'apparaît pas
-                // ce jour-là dans l'export mais a bien livré pour un collègue)
-                Object.entries(ajust).forEach(([k, a]) => {
-                    const [c, date] = k.split('|');
-                    if (c === compte && !jours[date] && a.recus > 0) {
-                        jours[date] = { livres: 0, prevus: 0, pudo: 0, echecs: 0, routes: [], codesPostaux: [], routeColis: {}, cedes: 0, recus: a.recus };
-                        totalRecus += a.recus;
-                    }
-                });
+                const totalRemunerables = Object.values(jours).reduce((a, j) => a + colisRemunerablesJour(j), 0);
                 // totalLivres reste le chiffre BRUT de l'export (statistiques).
                 // totalRemunerables est ce qui sert à la paie et à l'affichage.
-                const totalRemunerables = Object.values(jours).reduce((a, j) => a + colisRemunerablesJour(j), 0);
-                copie[compte] = { ...liv, jours, totalCedes, totalRecus, totalRemunerables };
-            });
-            // Comptes absents de l'export mais destinataires d'un transfert
-            Object.entries(ajust).forEach(([k, a]) => {
-                const [compte, date] = k.split('|');
-                if (copie[compte] || a.recus <= 0) return;
-                copie[compte] = {
-                    jours: { [date]: { livres: 0, prevus: 0, pudo: 0, echecs: 0, routes: [], codesPostaux: [], routeColis: {}, cedes: 0, recus: a.recus } },
-                    totalLivres: 0, totalPrevus: 0, totalPudo: 0, totalEchecs: 0,
-                    totalCedes: 0, totalRecus: a.recus, totalRemunerables: a.recus
-                };
+                copie[compte] = { ...liv, jours, totalCedes, totalRecus, totalRemunerables,
+                    totalPudo: Math.max(0, (Number(liv.totalPudo) || 0) + deltaPudo), totalPudoBrut: liv.totalPudo || 0 };
             });
             return copie;
         }
 
-        function enregistrerTransfert({ mois, date, de, vers, nb, mode, note, routes }) {
+        function enregistrerTransfert({ mois, date, de, vers, nb, mode, note, routes, journee }) {
             const n = Number(nb) || 0;
             if (!date || !de || !vers || n <= 0) { showToast('Transfert incomplet', 'warning'); return null; }
             if (de === vers) { showToast('Source et destinataire identiques', 'warning'); return null; }
@@ -511,14 +548,27 @@
             const liste = _ensureTransfertsMois(String(date).slice(0, 7));
             // Un réimport du même fichier ne doit pas empiler deux fois le même
             // transfert : on remplace celui qui porte déjà sur ce trio.
-            const doublon = liste.findIndex(x => x.date === date && x.de === de && x.vers === vers && x.mode === (mode || 'manuel'));
+            const doublon = liste.findIndex(x => x.date === date && x.de === de && x.vers === vers && x.mode === (mode || 'manuel') && !!x.journee === !!journee);
             if (doublon >= 0) liste.splice(doublon, 1);
+            // v56 — une journée ne peut être transférée entière qu'à UN seul livreur :
+            // un nouveau transfert de journée remplace l'ancien (au lieu de compter
+            // les colis deux fois chez deux destinataires).
+            if (journee) {
+                for (let i = liste.length - 1; i >= 0; i--) {
+                    const x = liste[i];
+                    if (x.date === date && x.de === de && estTransfertJournee(x)) {
+                        journaliser(String(date).slice(0, 7), 'suppression', { id: x.id, date: x.date, de: x.de, vers: x.vers, nb: x.nb, mode: x.mode, note: 'remplacé par un nouveau transfert de journée' });
+                        liste.splice(i, 1);
+                    }
+                }
+            }
             const t = {
                 id: 'tr_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
                 date, de, vers, nb: n,
                 mode: mode || 'manuel',
                 note: note || '',
                 routes: routes || [],
+                journee: !!journee,
                 creeLe: new Date().toISOString()
             };
             liste.push(t);

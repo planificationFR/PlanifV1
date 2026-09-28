@@ -1,43 +1,71 @@
-        // ============== TRANSFERT D'UNE JOURNÉE ENTRE LIVREURS (correction manuelle) ==============
+        // ============== TRANSFERT D'UNE JOURNÉE ENTRE LIVREURS (v56) ==============
+        // Principe simple : « la journée du JJ/MM enregistrée sous le compte X a
+        // été faite par Y ». Les données importées ne sont jamais modifiées ;
+        // un seul enregistrement dans data.transfertsColis porte l'information,
+        // la paie et l'affichage en découlent. Annulable à tout moment.
+        //   - le destinataire est toujours rattaché à son vrai compte EPOD
+        //     (plus de carte fantôme « Hamza » à côté de « Hamza-Colmar ») ;
+        //   - une journée ne peut aller qu'à un seul livreur ;
+        //   - les colis PUDO suivent la journée ;
+        //   - après enregistrement, le résultat est VÉRIFIÉ : si le salaire du
+        //     destinataire n'a pas reçu les colis, le transfert est annulé et
+        //     un message d'erreur s'affiche (plus de faux « transféré »).
+
+        /** Liste des destinataires possibles : un choix par personne, rattaché à son compte EPOD. */
+        function _destinatairesTransfert(monthData, sourceName) {
+            const choix = new Map(); // valeur (compte) -> libellé
+            const cache = {};
+            (data.livreurs || []).forEach(l => {
+                if (!l || !l.nom) return;
+                const libelle = (l.nom + (l.prenom ? ' ' + l.prenom : '')).trim();
+                const compte = resoudreCompteTransfert(l.nom, monthData, cache);
+                if (compte === sourceName) return;
+                if (!choix.has(compte)) choix.set(compte, compte === l.nom ? libelle : `${libelle} — compte ${compte}`);
+            });
+            Object.keys(monthData || {}).forEach(c => {
+                if (c !== sourceName && !choix.has(c)) choix.set(c, `${c} (compte sans fiche livreur)`);
+            });
+            return [...choix.entries()].sort((a, b) => a[1].localeCompare(b[1]));
+        }
+
         function ouvrirTransfertJournee(sourceName, date) {
-            const month = selectedHistoriqueMonth;
+            const month = String(date).slice(0, 7);
             const monthData = data.historiqueEPOD?.[month] || {};
             const src = monthData[sourceName];
-            if (!src || !src.jours[date]) { showToast('Journée introuvable', 'error'); return; }
+            if (!src || !src.jours || !src.jours[date]) { showToast('Journée introuvable', 'error'); return; }
             const j = src.jours[date];
-            const cibles = new Set();
-            Object.keys(monthData).forEach(n => { if (n !== sourceName) cibles.add(n); });
-            (data.livreurs || []).forEach(l => { if (l.nom && l.nom !== sourceName) cibles.add(l.nom); });
-            const opts = [...cibles].sort((a, b) => a.localeCompare(b))
-                .map(n => `<option value="${escAttr(n)}">${escapeHtml(n)}</option>`).join('');
+            const deja = getTransfertsMois(month).filter(t => t.date === date && t.de === sourceName && estTransfertJournee(t));
+            const opts = _destinatairesTransfert(monthData, sourceName)
+                .map(([val, lib]) => `<option value="${escAttr(val)}">${escapeHtml(lib)}</option>`).join('');
 
             const overlay = document.createElement('div');
             overlay.className = 'modal-overlay active modal-dynamique';
             overlay.style.zIndex = '99999';
             overlay.innerHTML = `
-              <div class="modal" style="max-width:440px;">
+              <div class="modal" style="max-width:460px;">
                 <div class="modal-header">
-                  <h3 style="margin:0;"><i class="fas fa-exchange-alt"></i> Transférer une journée</h3>
-                  <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">&times;</button>
+                  <h3 style="margin:0;"><i class="fas fa-exchange-alt" aria-hidden="true"></i> Transférer une journée</h3>
+                  <button class="modal-close" aria-label="Fermer" onclick="this.closest('.modal-overlay').remove()">&times;</button>
                 </div>
                 <div class="modal-body" style="padding:1rem 1.25rem 1.25rem;">
                   <p style="margin-bottom:0.85rem;font-size:0.92rem;">
-                    Déplacer la journée du <strong>${escapeHtml(date)}</strong>
-                    (<strong>${escapeHtml(j.livres || 0)}</strong> colis livrés${(j.echecs ? `, ${escapeHtml(j.echecs)} échec(s)` : '')})
-                    de <strong>${escapeHtml(sourceName)}</strong> vers :
+                    Journée du <strong>${escapeHtml(date)}</strong> enregistrée sous le compte <strong>${escapeHtml(sourceName)}</strong> :
+                    <strong>${escapeHtml(j.livres || 0)}</strong> colis livrés${j.pudo ? ` (dont ${escapeHtml(j.pudo)} PUDO)` : ''}.
                   </p>
+                  ${deja.length ? `<div style="margin-bottom:0.85rem;padding:0.55rem 0.75rem;border-left:3px solid var(--warning);background:rgba(232,89,12,0.08);font-size:0.84rem;">
+                      Déjà transférée à <strong>${escapeHtml(deja.map(t => t.vers).join(', '))}</strong>. Un nouveau choix remplacera ce transfert.</div>` : ''}
+                  <label for="transfertCibleSelect" style="display:block;font-weight:600;margin-bottom:0.35rem;">Livreur qui a réellement fait cette journée</label>
                   <select id="transfertCibleSelect" class="form-input" style="width:100%;margin-bottom:1rem;">
                     ${opts || '<option value="">(aucun autre livreur disponible)</option>'}
                   </select>
                   <div style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:1rem;">
-                    Les colis, le salaire ET les analyses Contrôle EPOD (taux d'appel, anomalies, Next Day)
-                    de cette journée seront transférés vers le compte destinataire.
-                    Utile quand un livreur travaille avec deux comptes le même jour.
+                    Tous les colis de la journée (PUDO compris) et le salaire correspondant passent au livreur choisi.
+                    Le fichier importé n'est pas modifié : le transfert s'annule d'un clic depuis la ligne de la journée.
                   </div>
                   <div style="display:flex;gap:0.5rem;justify-content:flex-end;">
                     <button class="btn btn-secondary btn-sm" onclick="this.closest('.modal-overlay').remove()">Annuler</button>
                     <button class="btn btn-primary btn-sm" onclick="var t=document.getElementById('transfertCibleSelect').value; if(t){this.closest('.modal-overlay').remove(); transfererJourneeVers('${escJsAttr(sourceName)}','${escJsAttr(date)}',t);}">
-                      <i class="fas fa-check"></i> Transférer
+                      <i class="fas fa-check" aria-hidden="true"></i> Transférer
                     </button>
                   </div>
                 </div>
@@ -45,44 +73,80 @@
             document.body.appendChild(overlay);
         }
 
-        // v46 — Cette fonction déplaçait physiquement la journée dans
-        // data.historiqueEPOD. Deux mécanismes concurrents modifiaient donc les
-        // mêmes chiffres : celui-ci en écrasant les données brutes de l'export,
-        // et les transferts de colis en les ajustant. Résultat : des totaux qui
-        // ne correspondaient plus au fichier source et des réaffectations qui
-        // pointaient sur des journées disparues.
-        //
-        // Elle passe désormais par le mécanisme unique : un transfert portant
-        // sur la totalité des colis livrés ce jour-là. Les données importées
-        // restent intactes et l'action reste annulable.
+        /** Colis rémunérables d'un compte pour une date, transferts appliqués. */
+        function _colisRemunerablesCompteDate(mois, compte, date) {
+            const md = appliquerTransfertsMois(data.historiqueEPOD?.[mois] || {}, mois);
+            const j = md[compte] && md[compte].jours && md[compte].jours[date];
+            return j ? colisRemunerablesJour(j) : 0;
+        }
+
         function transfererJourneeVers(sourceName, date, targetName) {
-            const month = selectedHistoriqueMonth;
+            const month = String(date).slice(0, 7);
             const monthData = data.historiqueEPOD?.[month];
             if (!monthData || !monthData[sourceName] || !monthData[sourceName].jours[date]) {
-                showToast('Journée introuvable', 'error'); return;
+                showToast('Journée introuvable', 'error'); return false;
             }
+            const cible = resoudreCompteTransfert(targetName, monthData);
+            if (!cible || cible === sourceName) { showToast('Choisissez un autre livreur que celui de la journée', 'warning'); return false; }
             const j = monthData[sourceName].jours[date];
-            const nb = j.livres || 0;
-            if (nb <= 0) { showToast('Aucun colis livré ce jour-là', 'warning'); return; }
+            const nb = Number(j.livres) || 0;
+            if (nb <= 0) { showToast('Aucun colis livré ce jour-là', 'warning'); return false; }
+
+            // État avant (pour la vérification et l'annulation en cas d'échec)
+            const avantListe = JSON.stringify(getTransfertsMois(month));
+            const avantCible = _colisRemunerablesCompteDate(month, cible, date);
 
             const t = enregistrerTransfert({
-                mois: month, date, de: sourceName, vers: targetName, nb,
-                mode: 'manuel', note: 'Journée entière réaffectée',
+                mois: month, date, de: sourceName, vers: cible, nb,
+                mode: 'manuel', note: 'Journée entière réaffectée', journee: true,
                 routes: (j.routes || []).slice()
             });
-            if (!t) return;
+            if (!t) return false;
+
+            // Vérification : la source doit être à 0 colis ce jour-là et le destinataire
+            // doit avoir reçu les colis. Sinon on annule proprement.
+            const apresSource = _colisRemunerablesCompteDate(month, sourceName, date);
+            const apresCible = _colisRemunerablesCompteDate(month, cible, date);
+            const ancienVersCible = JSON.parse(avantListe).some(x => x.date === date && x.de === sourceName && estTransfertJournee(x) && resoudreCompteTransfert(x.vers, monthData) === cible);
+            const attenduCible = ancienVersCible ? avantCible : avantCible + nb;
+            if (apresSource !== 0 || apresCible !== attenduCible) {
+                data.transfertsColis[month] = JSON.parse(avantListe);
+                saveLocal({ silencieux: true });
+                refreshHistorique();
+                reportError(null, { apresSource, apresCible, attenduCible },
+                    'Le transfert n\'a pas pu être appliqué correctement : il a été annulé, aucune donnée n\'a changé.');
+                return false;
+            }
 
             // Transfert aussi côté Contrôle EPOD (taux d'appel, anomalies, Next Day, contacts)
             let ccMsg = '';
             try {
-                const rcc = ccTransfererJour(date, sourceName, targetName);
-                if (rcc.ok) ccMsg = ' — salaire + Contrôle EPOD ✓';
-                else if (rcc.raison && rcc.raison.includes('réimportez')) ccMsg = ' — ⚠ Contrôle EPOD non transféré : ' + rcc.raison;
-            } catch (e) { console.warn('[CC] transfert jour', e); }
+                const rcc = ccTransfererJour(date, sourceName, cible);
+                if (rcc && rcc.ok) ccMsg = ' (Contrôle EPOD inclus)';
+            } catch (e) { reportError(null, e, null, { silent: true }); }
 
-            markUnsaved(); saveLocal();
+            saveLocal({ silencieux: true });
             refreshHistorique();
-            showToast(`Journée du ${date} transférée de ${sourceName} à ${targetName}${ccMsg}`, 'success');
+            showToast(`Journée du ${date} : ${nb} colis transférés de ${sourceName} à ${cible}${ccMsg}`, 'success');
+            return true;
+        }
+
+        /** Annule le transfert de journée (retour au compte d'origine). */
+        function annulerTransfertJournee(sourceName, date) {
+            const month = String(date).slice(0, 7);
+            const liste = getTransfertsMois(month).filter(t => t.date === date && t.de === sourceName && estTransfertJournee(t));
+            if (!liste.length) { showToast('Aucun transfert à annuler pour cette journée', 'info'); return; }
+            if (!confirm(`Annuler le transfert de la journée du ${date} vers ${liste.map(t => t.vers).join(', ')} ?\n\nLes colis reviennent au compte ${sourceName}.`)) return;
+            if (!verifierMoisOuvert(month, 'annulation')) return;
+            const all = getTransfertsMois(month);
+            liste.forEach(t => {
+                const i = all.indexOf(t);
+                if (i >= 0) all.splice(i, 1);
+                journaliser(month, 'suppression', { id: t.id, date: t.date, de: t.de, vers: t.vers, nb: t.nb, mode: t.mode, note: t.note });
+            });
+            saveLocal({ silencieux: true });
+            refreshHistorique();
+            showToast('Transfert annulé : la journée revient à ' + sourceName, 'info');
         }
 
         function renderHistoriqueLivreurs(monthData) {
@@ -114,7 +178,8 @@
 
             container.innerHTML = livreurs.map(([livreurName, liv]) => {
                 const tauxReussite = liv.totalPrevus > 0 ? Math.round((liv.totalLivres / liv.totalPrevus) * 100) : 0;
-                const joursCount = Object.keys(liv.jours).length;
+                // v56 — une journée transférée entièrement à un autre livreur n'est plus comptée comme travaillée
+                const joursCount = Object.values(liv.jours).filter(j => colisRemunerablesJour(j) > 0).length;
 
                 // Find livreur config for salary calculation (matching robuste)
                 // v49 — Un compte présent dans l'export mais absent de la fiche
@@ -190,13 +255,24 @@
                     const partageBadge = partages && partages.length > 0
                         ? ` <span title="Route partagée avec ${partages.map(escapeHtml).join(', ')}" style="display:inline-block;padding:1px 6px;background:rgba(15,184,154,0.15);color:var(--primary);border-radius:8px;font-size:0.7rem;font-weight:700;margin-left:0.3rem;cursor:help;"><i class="fas fa-handshake" style="font-size:0.65rem;"></i> ${partages.map(escapeHtml).join(', ')}</span>`
                         : '';
-                    const transfertBtn = `<button class="btn btn-sm" title="Transférer cette journée à un autre livreur" style="padding:2px 7px;background:var(--background-light);color:var(--text-secondary);border:1px solid var(--border-light);" onclick="event.stopPropagation();ouvrirTransfertJournee('${escJsAttr(livreurName)}','${escJsAttr(date)}')"><i class="fas fa-exchange-alt"></i></button>`;
+                    const estTransferee = Array.isArray(j.transfereeVers) && j.transfereeVers.length > 0;
+                    const transfertBtn = estTransferee
+                        ? `<button class="btn btn-sm" title="Annuler le transfert de cette journée" aria-label="Annuler le transfert de cette journée" style="padding:2px 7px;background:rgba(232,89,12,0.12);color:var(--secondary);border:1px solid rgba(232,89,12,0.4);" onclick="event.stopPropagation();annulerTransfertJournee('${escJsAttr(livreurName)}','${escJsAttr(date)}')"><i class="fas fa-rotate-left" aria-hidden="true"></i></button>`
+                        : (Number(j.livres) > 0
+                            ? `<button class="btn btn-sm" title="Transférer cette journée à un autre livreur" aria-label="Transférer cette journée à un autre livreur" style="padding:2px 7px;background:var(--background-light);color:var(--text-secondary);border:1px solid var(--border-light);" onclick="event.stopPropagation();ouvrirTransfertJournee('${escJsAttr(livreurName)}','${escJsAttr(date)}')"><i class="fas fa-exchange-alt" aria-hidden="true"></i></button>`
+                            : '');
+                    const journeeBadge = estTransferee
+                        ? ` <span style="display:inline-block;padding:1px 7px;border-radius:8px;font-size:0.7rem;font-weight:700;background:rgba(232,89,12,0.14);color:var(--secondary);">→ transférée à ${escapeHtml(j.transfereeVers.join(', '))}</span>`
+                        : (Array.isArray(j.recueDe) && j.recueDe.length
+                            ? ` <span style="display:inline-block;padding:1px 7px;border-radius:8px;font-size:0.7rem;font-weight:700;background:rgba(43,110,143,0.14);color:var(--primary);">← journée de ${escapeHtml(j.recueDe.join(', '))}</span>`
+                            : '');
                     const jPaye = estJourPaye(selectedHistoriqueMonth, livreurName, date);
                     const payeBtn = `<button class="btn btn-sm" title="${jPaye ? 'Marquer comme non payé' : 'Marquer cette journée comme payée'}" style="padding:2px 7px;background:${jPaye ? 'rgba(45,212,163,0.18)' : 'var(--background-light)'};color:${jPaye ? 'var(--success)' : 'var(--text-secondary)'};border:1px solid ${jPaye ? 'rgba(45,212,163,0.45)' : 'var(--border-light)'};" onclick="event.stopPropagation();toggleJourPaye('${escJsAttr(livreurName)}','${escJsAttr(date)}')"><i class="fas ${jPaye ? 'fa-check-circle' : 'fa-circle'}"></i></button>`;
                     const rowStyle = jPaye ? ' style="background:rgba(45,212,163,0.06);"' : '';
                     const payeTag = jPaye ? ' <span style="color:var(--success);font-size:0.68rem;font-weight:700;">✓ payé</span>' : '';
                     const kmTag = (j.km !== undefined) ? ` <span title="Kilométrage GPS réel${j.kmApprox ? ' — approximatif : deux séquences entrelacées ce jour-là (renfort sous ce compte), grands sauts exclus' : ''}${j.respectOrdre !== undefined ? ` · ordre planifié respecté à ${escapeHtml(j.respectOrdre)} %` : ''}" style="color:var(--text-secondary);font-size:0.68rem;cursor:help;">${j.kmApprox ? '≈' : ''}${escapeHtml(j.km)} km</span>` : '';
-                    return `<tr${rowStyle}><td>${dateStr}${partageBadge}${payeTag}${kmTag}</td>${colisCell}${pudoCell}<td>${escapeHtml(j.prevus)}</td><td>${tauxJour}%</td><td class="salaire-cell">${salaireJour} €</td><td style="text-align:center;white-space:nowrap;">${payeBtn} ${transfertBtn}</td></tr>`;
+                    const rowAttrs = estTransferee ? ' class="jour-transfere" style="opacity:0.75;"' : rowStyle;
+                    return `<tr${rowAttrs}><td>${dateStr}${journeeBadge}${partageBadge}${payeTag}${kmTag}</td>${colisCell}${pudoCell}<td>${escapeHtml(j.prevus)}</td><td>${tauxJour}%</td><td class="salaire-cell">${salaireJour} €</td><td style="text-align:center;white-space:nowrap;">${payeBtn} ${transfertBtn}</td></tr>`;
                 }).join('');
 
                 // Bandeau PUDO (toujours visible si totalPudo > 0)

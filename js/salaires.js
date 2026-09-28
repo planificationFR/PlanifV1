@@ -267,13 +267,16 @@
                     });
                     const _ajusts = {};
                     Object.keys(livAgg.jours).forEach(d => {
-                        const a = calculerAjustementsTransferts(d.slice(0, 7))[courier + '|' + d];
-                        if (a) { livAgg.jours[d].cedes = a.cedes; livAgg.jours[d].recus = a.recus; }
+                        const a = calculerAjustementsTransferts(d.slice(0, 7), data.historiqueEPOD?.[d.slice(0, 7)])[courier + '|' + d];
+                        if (a) {
+                            livAgg.jours[d].cedes = a.cedes; livAgg.jours[d].recus = a.recus;
+                            livAgg.jours[d].pudo = Math.max(0, (livAgg.jours[d].pudo || 0) - a.cedesPudo) + a.recusPudo;
+                        }
                     });
                     // Journées où ce livreur n'a que des colis reçus
                     Object.keys(data.transfertsColis || {}).forEach(m0 => {
                         (data.transfertsColis[m0] || []).forEach(t => {
-                            if (t.vers === courier && !livAgg.jours[t.date]) {
+                            if (resoudreCompteTransfert(t.vers, data.historiqueEPOD?.[m0]) === courier && !livAgg.jours[t.date]) {
                                 livAgg.jours[t.date] = { livres: 0, pudo: 0, cedes: 0, recus: t.nb };
                             }
                         });

@@ -9,7 +9,7 @@
  * NE JAMAIS placer ici une clé « service_role ».
  * ════════════════════════════════════════════════════════════════════ */
 const CONFIG = Object.freeze({
-    appVersion: 'v55',
+    appVersion: 'v56',
 
     // --- Supabase (Project Settings → API) ---
     supabaseUrl: 'https://kbgkglstvvbpdeoermll.supabase.co',
